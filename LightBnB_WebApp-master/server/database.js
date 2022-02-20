@@ -92,16 +92,75 @@ exports.getAllReservations = getAllReservations;
  * @param {*} limit The number of results to return.
  * @return {Promise<[{}]>}  A promise to the properties.
  */
- const getAllProperties = (options, limit = 10) => {
-  return pool
-    .query(`
-    SELECT * 
-    FROM properties LIMIT $1`, [limit])
-    .then((result) => result.rows)
-    .catch((err) => {
-      console.log(err.message);
-    });
-};
+//  const getAllProperties = (options, limit = 10) => {
+//   return pool
+//     .query(`
+//     SELECT * 
+//     FROM properties LIMIT $1`, [limit])
+//     .then((result) => result.rows)
+//     .catch((err) => {
+//       console.log(err.message);
+//     });
+// };
+
+const getAllProperties = function(options, limit = 10) {
+
+  const queryParams = [];
+
+  let queryString = `
+SELECT properties.*, avg(property_reviews.rating) as average_rating
+FROM properties
+JOIN property_reviews ON properties.id = property_id
+`;
+
+  let filterQuery = [];
+
+  if (options.city) {
+
+      queryParams.push(`%${options.city}%`);
+      filterQuery.push(`city LIKE $${queryParams.length} `);
+  }
+
+  if (options.minimum_rating) {
+      queryParams.push(options.minimum_rating);
+      filterQuery.push(`property_reviews.rating >= $${queryParams.length}`);
+  }
+
+  if (options.minimum_price_per_night) {
+      queryParams.push(options.minimum_price_per_night * 100);
+      filterQuery.push(`cost_per_night >= $${queryParams.length}`);
+  }
+
+  if (options.maximum_price_per_night) {
+      queryParams.push(options.maximum_price_per_night);
+      filterQuery.push(`cost_per_night <= $${queryParams.length}`);
+  }
+
+
+  queryParams.push(limit);
+
+  if (filterQuery.length > 0) {
+      queryString += `WHERE ${filterQuery.join (' AND ')} `
+  }
+
+  queryString += `
+  GROUP BY properties.id
+  ORDER BY cost_per_night
+  `;
+
+  queryString += `LIMIT $${queryParams.length}`;
+
+  // 5
+  // console.log(queryString, queryParams);
+
+  // 6
+  return pool.query(queryString, queryParams)
+      .then(res => {
+          // console.log(res.rows)
+          return res.rows
+      });
+
+}
 exports.getAllProperties = getAllProperties;
 
 /**
